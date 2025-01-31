@@ -1,56 +1,82 @@
 import networkx as nx
 import matplotlib.pyplot as plt
 from collections import deque
-import time
+from typing import Dict, List, Set, Tuple
 
 class RouteFinder:
     def __init__(self):
         self.graph = nx.Graph()
         
-    def add_road(self, intersection1, intersection2, distance=1):
-        """Add a road between two intersections with given distance."""
-        self.graph.add_edge(intersection1, intersection2, weight=distance)
-
-    def bidirectional_bfs(self, start, end):
-        """Implement bi-directional BFS to find shortest path."""
-        if start == end:
-            return [start]
+    def add_road(self, intersection1: str, intersection2: str, weight: int = 1):
+        """Add a road between two intersections with optional weight."""
+        self.graph.add_edge(intersection1, intersection2, weight=weight)
         
-        
+    def bidirectional_bfs(self, start: str, end: str) -> List[str]:
+        """
+        Implements Bi-directional BFS to find shortest path between start and end nodes.
+        Returns the path as a list of nodes.
+        """
+        # Initialize forward and backward queues
         forward_queue = deque([(start, [start])])
         backward_queue = deque([(end, [end])])
         
-        forward_visited = {start: [start]}
-        backward_visited = {end: [end]}
+        # Initialize visited sets for both directions
+        forward_visited = {start}
+        backward_visited = {end}
         
         while forward_queue and backward_queue:
-           
+            # Forward BFS
             current, path = forward_queue.popleft()
             for neighbor in self.graph.neighbors(current):
                 if neighbor in backward_visited:
-                    forward_path = path
-                    backward_path = backward_visited[neighbor]
-                    return forward_path + backward_path[::-1][1:]
+                    # Found intersection point
+                    backward_path = self._find_backward_path(neighbor, end, backward_visited)
+                    return path + backward_path[1:]
                 
                 if neighbor not in forward_visited:
-                    forward_visited[neighbor] = path + [neighbor]
+                    forward_visited.add(neighbor)
                     forward_queue.append((neighbor, path + [neighbor]))
             
+            # Backward BFS
             current, path = backward_queue.popleft()
             for neighbor in self.graph.neighbors(current):
                 if neighbor in forward_visited:
-                    forward_path = forward_visited[neighbor]
-                    backward_path = path
-                    return forward_path + backward_path[::-1][1:]
+                    # Found intersection point
+                    forward_path = self._find_forward_path(start, neighbor, forward_visited)
+                    return forward_path + path[1:]
                 
                 if neighbor not in backward_visited:
-                    backward_visited[neighbor] = path + [neighbor]
-                    backward_queue.append((neighbor, path + [neighbor]))
+                    backward_visited.add(neighbor)
+                    backward_queue.append((neighbor, [neighbor] + path[1:]))
         
-        return None 
-
-    def standard_bfs(self, start, end):
-        """Implement standard BFS for comparison."""
+        return []  # No path found
+    
+    def _find_backward_path(self, intersection: str, end: str, visited: Set[str]) -> List[str]:
+        """Helper function to reconstruct backward path."""
+        path = [intersection]
+        current = intersection
+        while current != end:
+            for neighbor in self.graph.neighbors(current):
+                if neighbor in visited:
+                    current = neighbor
+                    path.append(current)
+                    break
+        return path
+    
+    def _find_forward_path(self, start: str, intersection: str, visited: Set[str]) -> List[str]:
+        """Helper function to reconstruct forward path."""
+        path = [intersection]
+        current = intersection
+        while current != start:
+            for neighbor in self.graph.neighbors(current):
+                if neighbor in visited:
+                    current = neighbor
+                    path.insert(0, current)
+                    break
+        return path
+    
+    def standard_bfs(self, start: str, end: str) -> List[str]:
+        """Implements standard BFS for comparison."""
         queue = deque([(start, [start])])
         visited = {start}
         
@@ -63,75 +89,57 @@ class RouteFinder:
                 if neighbor not in visited:
                     visited.add(neighbor)
                     queue.append((neighbor, path + [neighbor]))
-        
-        return None
-
-    def visualize_path(self, path, title="Route Visualization"):
-        """Visualize the found path using networkx."""
+        return []
+    
+    def visualize_search(self, path: List[str] = None):
+        """Visualize the graph and highlight the found path."""
         pos = nx.spring_layout(self.graph)
         
-      
-        plt.figure(figsize=(10, 8))
-        nx.draw_networkx_nodes(self.graph, pos, node_color='lightblue', 
-                             node_size=500)
+        # Draw the base graph
         nx.draw_networkx_edges(self.graph, pos, edge_color='gray')
+        nx.draw_networkx_nodes(self.graph, pos, node_color='lightblue')
         nx.draw_networkx_labels(self.graph, pos)
         
-       
+        # Highlight the path if provided
         if path:
             path_edges = list(zip(path[:-1], path[1:]))
             nx.draw_networkx_edges(self.graph, pos, edgelist=path_edges, 
                                  edge_color='r', width=2)
             nx.draw_networkx_nodes(self.graph, pos, nodelist=path,
-                                 node_color='lightgreen', node_size=500)
+                                 node_color='lightgreen')
         
-        plt.title(title)
+        plt.title("City Map with Shortest Path")
         plt.axis('off')
         plt.show()
 
-    def compare_performance(self, start, end, num_trials=100):
-        """Compare performance of bi-directional BFS vs standard BFS."""
-        start_time = time.time()
-        for _ in range(num_trials):
-            bi_path = self.bidirectional_bfs(start, end)
-        bi_time = (time.time() - start_time) / num_trials
-
-        start_time = time.time()
-        for _ in range(num_trials):
-            std_path = self.standard_bfs(start, end)
-        std_time = (time.time() - start_time) / num_trials
-
-        return {
-            'bidirectional_time': bi_time,
-            'standard_time': std_time,
-            'bidirectional_path': bi_path,
-            'standard_path': std_path
-        }
-
-def main():
+# Example usage and comparison
+def run_comparison():
+    # Create a sample city map
     route_finder = RouteFinder()
     
+    # Add some sample roads
     roads = [
         ('A', 'B'), ('B', 'C'), ('C', 'D'), ('D', 'E'),
         ('A', 'F'), ('F', 'G'), ('G', 'H'), ('H', 'E'),
-        ('B', 'G'), ('C', 'H'), ('F', 'C')
+        ('B', 'G'), ('C', 'H')
     ]
     
     for road in roads:
         route_finder.add_road(*road)
     
+    # Find path using bi-directional BFS
     start, end = 'A', 'E'
+    bi_bfs_path = route_finder.bidirectional_bfs(start, end)
     
-    results = route_finder.compare_performance(start, end)
+    # Find path using standard BFS
+    bfs_path = route_finder.standard_bfs(start, end)
     
-    print(f"\nPerformance Comparison (averaged over 100 trials):")
-    print(f"Bi-directional BFS time: {results['bidirectional_time']*1000:.2f} ms")
-    print(f"Standard BFS time: {results['standard_time']*1000:.2f} ms")
-    print(f"\nBi-directional BFS path: {' -> '.join(results['bidirectional_path'])}")
-    print(f"Standard BFS path: {' -> '.join(results['standard_path'])}")
+    # Compare results
+    print(f"Bi-directional BFS path: {' -> '.join(bi_bfs_path)}")
+    print(f"Standard BFS path: {' -> '.join(bfs_path)}")
     
-    route_finder.visualize_path(results['bidirectional_path'], 
-                              "Bi-directional BFS Route")
+    # Visualize the result
+    route_finder.visualize_search(bi_bfs_path)
 
 if __name__ == "__main__":
-    main()
+    run_comparison()
